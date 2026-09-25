@@ -126,6 +126,28 @@ def status():
     }
 
 
+@app.get("/api/bot/predict")
+def predict():
+    pred = ensemble_predict(history)
+    return {
+        "status": "running",
+        "lastSession": last_session,
+        "historyCount": len(history),
+        "canPredict": len(history) >= WARMUP_ROUNDS,
+        "prediction": pred,
+    }
+
+
+@app.get("/api/bot/history")
+def history_api():
+    return {
+        "status": "running",
+        "historyCount": len(history),
+        "lastSession": last_session,
+        "history": history[-50:],
+    }
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
