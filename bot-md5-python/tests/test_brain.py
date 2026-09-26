@@ -32,6 +32,16 @@ def test_homepage_fetches_live_prediction_data():
     assert "fetch(" in body or "/api/bot/predict" in body
 
 
+def test_learning_history_endpoint_keeps_real_history_separate_from_system_log():
+    response = client.get("/api/bot/learning-history")
+    assert response.status_code == 200
+    body = response.json()
+    assert "real_history" in body
+    assert "system_history" in body
+    assert isinstance(body["real_history"], list)
+    assert isinstance(body["system_history"], list)
+
+
 def test_bot_learn_and_predict_endpoints_work():
     hist = ["TAI", "XIU", "TAI", "XIU", "TAI", "XIU"]
 

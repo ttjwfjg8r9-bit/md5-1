@@ -364,12 +364,39 @@ def predict():
 @app.get("/api/bot/history")
 def history_api():
     memory = getattr(brain.evolution, "memory", {})
-    history = memory.get("history", []) or []
+    system_history = memory.get("history", []) or []
     return {
         "status": "ok",
-        "historyCount": len(history),
-        "lastSession": history[-1] if history else None,
-        "history": history,
+        "historyCount": len(system_history),
+        "lastSession": system_history[-1] if system_history else None,
+        "history": system_history,
+        "system_history": system_history,
+    }
+
+
+@app.get("/api/bot/learning-history")
+def learning_history_api():
+    memory = getattr(brain.evolution, "memory", {})
+    patterns = memory.get("patterns", {}) or {}
+    real_history = []
+
+    for pattern, stats in patterns.items():
+        samples = stats.get("samples", 0)
+        if samples <= 0:
+            continue
+        real_history.append({
+            "pattern": pattern,
+            "samples": samples,
+            "TAI": stats.get("TAI", 0),
+            "XIU": stats.get("XIU", 0),
+        })
+
+    system_history = memory.get("history", []) or []
+    return {
+        "status": "ok",
+        "historyCount": len(real_history),
+        "real_history": real_history,
+        "system_history": system_history,
     }
 
 
