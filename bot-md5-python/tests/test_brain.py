@@ -24,3 +24,23 @@ def test_pattern_key_stable_for_history_list():
     evo = SelfEvolution()
     history = ["TAI", "XIU", "TAI", "XIU"]
     assert evo.pattern_key(history) == "TAI|XIU|TAI|XIU"
+
+
+def test_bot_learn_and_predict_endpoints_work():
+    hist = ["TAI", "XIU", "TAI", "XIU", "TAI", "XIU"]
+
+    learn = client.post(
+        "/api/bot/learn",
+        json={"history": hist, "actual": "TAI"},
+    )
+    assert learn.status_code == 200
+    assert learn.json()["status"] == "ok"
+
+    predict = client.post(
+        "/api/bot/predict",
+        json={"history": hist},
+    )
+    assert predict.status_code == 200
+    body = predict.json()
+    assert body["status"] == "ok"
+    assert body["prediction"]["pred"] in {"TAI", "XIU", None}

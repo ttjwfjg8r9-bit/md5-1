@@ -1,12 +1,39 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import uvicorn
 
+from brain import Brain
 from config import PORT
 
 app = FastAPI(title="MD5 UI")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+brain = Brain()
+
+
+def _normalize_history(history):
+    if not isinstance(history, list):
+        return []
+
+    cleaned = []
+    for item in history:
+        if isinstance(item, str):
+            cleaned.append(item.upper())
+        elif isinstance(item, dict):
+            value = item.get("outcome") or item.get("result") or item.get("prediction")
+            if isinstance(value, str):
+                cleaned.append(value.upper())
+        elif item is not None:
+            cleaned.append(str(item).upper())
+    return cleaned
+
+
+async def _read_json_body(request: Request):
+    try:
+        return await request.json()
+    except Exception:
+        return {}
 
 
 @app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
@@ -212,34 +239,114 @@ def root():
 
 @app.get("/api/bot/status")
 def status():
+    memory = getattr(brain.evolution, "memory", {})
+    history = memory.get("history", []) or []
+    algorithms = brain.evolution.algorithms.get("algorithms", []) or []
     return {
-        "status": "ui_only",
-        "lastSession": None,
-        "historyCount": 0,
-        "stats": {"total": 0, "correct": 0, "wrong": 0},
-        "prediction": {"pred": None, "confidence": 0, "reason": "ui only"},
-        "canPredict": False,
+        "status": "online",
+        "lastSession": history[-1] if history else None,
+        "historyCount": len(history),
+        "stats": {
+            "total": len(algorithms),
+            "correct": sum(1 for item in algorithms if item.get("status") == "active"),
+            "wrong": sum(1 for item in algorithms if item.get("status") in {"weak", "disabled"}),
+        },
+        "prediction": {"pred": None, "confidence": 0, "reason": "brain ready"},
+        "canPredict": True,
+    }
+
+
+@app.post("/api/bot/learn")
+async def learn_bot(request: Request):
+    payload = await _read_json_body(request)
+    history = _normalize_history(payload.get("history", []))
+    actual = str(payload.get("actual", "")).upper()
+
+    if actual in {"TAI", "XIU"}:
+        brain.learn(history, actual)
+        return {"status": "ok", "updated": True, "historyCount": len(history)}
+
+    return {"status": "ok", "updated": False, "historyCount": len(history)}
+
+
+@app.post("/api/bot/predict")
+async def predict_bot(request: Request):
+    payload = await _read_json_body(request)
+    history = _normalize_history(payload.get("history", []))
+    result = brain.think(history)
+
+    if not result:
+        return {
+            "status": "ok",
+            "canPredict": False,
+            "historyCount": len(history),
+            "prediction": {"pred": None, "confidence": 0, "reason": "no_pattern"},
+        }
+
+    accuracy = result.get("accuracy", 0.0)
+    prediction = result.get("prediction")
+    return {
+        "status": "ok",
+        "canPredict": True,
+        "historyCount": len(history),
+        "prediction": {
+            "pred": prediction,
+            "confidence": round(float(accuracy) * 100, 1),
+            "reason": result.get("algorithm", "brain"),
+            "algorithm": result.get("algorithm", "fallback"),
+        },
     }
 
 
 @app.get("/api/bot/predict")
 def predict():
+    history = []
+    result = brain.think(history)
+    if not result:
+        return {
+            "status": "ok",
+            "lastSession": None,
+            "historyCount": 0,
+            "canPredict": False,
+            "prediction": {"pred": None, "confidence": 0, "reason": "no_pattern"},
+        }
+
     return {
-        "status": "ui_only",
+        "status": "ok",
         "lastSession": None,
         "historyCount": 0,
-        "canPredict": False,
-        "prediction": {"pred": None, "confidence": 0, "reason": "ui only"},
+        "canPredict": True,
+        "prediction": {"pred": result.get("prediction"), "confidence": 0, "reason": result.get("algorithm", "brain")},
     }
 
 
 @app.get("/api/bot/history")
 def history_api():
+    memory = getattr(brain.evolution, "memory", {})
+    history = memory.get("history", []) or []
     return {
-        "status": "ui_only",
-        "historyCount": 0,
-        "lastSession": None,
-        "history": [],
+        "status": "ok",
+        "historyCount": len(history),
+        "lastSession": history[-1] if history else None,
+        "history": history,
+    }
+
+
+@app.post("/api/bot/sync")
+async def sync_bot(request: Request):
+    payload = await _read_json_body(request)
+    message = str(payload.get("message") or "brain:auto-sync")
+    result = brain.sync_git(message)
+    return {"status": "ok", "sync": result}
+
+
+@app.get("/api/bot/sync-status")
+def sync_status():
+    return {
+        "status": "ok",
+        "enabled": brain.sync.enabled,
+        "remote": brain.sync.remote,
+        "branch": brain.sync.branch,
     }
 
 
