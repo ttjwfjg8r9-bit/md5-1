@@ -202,36 +202,76 @@ def root():
     <div class="stats">
       <div class="stat-box">
         <div class="label">Total</div>
-        <div class="value">120</div>
+        <div id="totalValue" class="value">--</div>
       </div>
       <div class="stat-box">
         <div class="label">Win</div>
-        <div class="value">76</div>
+        <div id="winValue" class="value">--</div>
       </div>
     </div>
 
     <div class="card">
       <div class="title">Prediction</div>
-      <div class="prediction tai">TAI</div>
-      <div class="meta"><span>Confidence</span><strong>82%</strong></div>
-      <div class="meta"><span>Method</span><strong>UI</strong></div>
+      <div id="predictionValue" class="prediction tai">--</div>
+      <div class="meta"><span>Confidence</span><strong id="confidenceValue">--</strong></div>
+      <div class="meta"><span>Method</span><strong id="methodValue">--</strong></div>
       <div class="dice-row">
-        <div class="dice tai">4</div>
-        <div class="dice xiu">2</div>
-        <div class="dice tai">6</div>
+        <div class="dice tai">--</div>
+        <div class="dice xiu">--</div>
+        <div class="dice tai">--</div>
       </div>
-      <div class="status">UI-only mode</div>
+      <div id="statusValue" class="status">Loading...</div>
     </div>
 
     <div class="card">
       <div class="title">Summary</div>
       <ul class="list">
-        <li>Giao diện chỉ hiển thị</li>
-        <li>Không fetch API bên ngoài</li>
-        <li>Không cần token</li>
+        <li>Bot đang lấy dữ liệu từ backend</li>
+        <li>Đồng bộ hóa tự động với engine</li>
+        <li>Không cần token để xem dự đoán</li>
       </ul>
     </div>
   </div>
+
+  <script>
+    async function loadBotData() {
+      try {
+        const [predictRes, statusRes] = await Promise.all([
+          fetch('/api/bot/predict'),
+          fetch('/api/bot/status')
+        ]);
+
+        const predictData = await predictRes.json();
+        const statusData = await statusRes.json();
+
+        const prediction = predictData.prediction && predictData.prediction.pred ? predictData.prediction.pred : 'Chưa đủ dữ liệu';
+        const confidence = predictData.prediction && predictData.prediction.confidence ? predictData.prediction.confidence : 0;
+        const method = predictData.prediction && predictData.prediction.reason ? predictData.prediction.reason : 'insufficient_data';
+
+        const predictionEl = document.getElementById('predictionValue');
+        predictionEl.textContent = prediction;
+        predictionEl.classList.remove('tai', 'xiu');
+        if (prediction === 'TAI') predictionEl.classList.add('tai');
+        else if (prediction === 'XIU') predictionEl.classList.add('xiu');
+
+        document.getElementById('confidenceValue').textContent = predictData.canPredict ? `${confidence}%` : '--';
+        document.getElementById('methodValue').textContent = predictData.canPredict ? method : 'insufficient_data';
+
+        const total = statusData.stats && statusData.stats.total ? statusData.stats.total : 0;
+        const win = statusData.stats && statusData.stats.correct ? statusData.stats.correct : 0;
+        document.getElementById('totalValue').textContent = total;
+        document.getElementById('winValue').textContent = win;
+
+        const statusEl = document.getElementById('statusValue');
+        statusEl.textContent = predictData.canPredict ? 'Live brain prediction' : 'Chưa đủ dữ liệu để dự đoán';
+      } catch (error) {
+        document.getElementById('predictionValue').textContent = 'Chưa đủ dữ liệu';
+        document.getElementById('statusValue').textContent = 'Bot unavailable';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadBotData);
+  </script>
 </body>
 </html>
     """
@@ -242,6 +282,7 @@ def status():
     memory = getattr(brain.evolution, "memory", {})
     history = memory.get("history", []) or []
     algorithms = brain.evolution.algorithms.get("algorithms", []) or []
+    can_predict = len(history) >= 3 and bool(algorithms)
     return {
         "status": "online",
         "lastSession": history[-1] if history else None,
@@ -251,8 +292,8 @@ def status():
             "correct": sum(1 for item in algorithms if item.get("status") == "active"),
             "wrong": sum(1 for item in algorithms if item.get("status") in {"weak", "disabled"}),
         },
-        "prediction": {"pred": None, "confidence": 0, "reason": "brain ready"},
-        "canPredict": True,
+        "prediction": {"pred": None, "confidence": 0, "reason": "insufficient_data" if not can_predict else "brain ready"},
+        "canPredict": can_predict,
     }
 
 
@@ -280,7 +321,7 @@ async def predict_bot(request: Request):
             "status": "ok",
             "canPredict": False,
             "historyCount": len(history),
-            "prediction": {"pred": None, "confidence": 0, "reason": "no_pattern"},
+            "prediction": {"pred": None, "confidence": 0, "reason": "insufficient_data"},
         }
 
     accuracy = result.get("accuracy", 0.0)
@@ -308,7 +349,7 @@ def predict():
             "lastSession": None,
             "historyCount": 0,
             "canPredict": False,
-            "prediction": {"pred": None, "confidence": 0, "reason": "no_pattern"},
+            "prediction": {"pred": None, "confidence": 0, "reason": "insufficient_data"},
         }
 
     return {

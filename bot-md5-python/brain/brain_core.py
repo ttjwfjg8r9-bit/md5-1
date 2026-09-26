@@ -25,6 +25,9 @@ class Brain:
 
     def think(self, history):
 
+        if not history or len(history) < 3:
+            return None
+
         result = self.evolution.predict(
             history
         )
@@ -32,17 +35,4 @@ class Brain:
         if result:
             return result
 
-        if not history:
-            return {
-                "prediction": "TAI",
-                "algorithm": "fallback"
-            }
-
-        return {
-            "prediction": (
-                "XIU"
-                if history[-1] == "TAI"
-                else "TAI"
-            ),
-            "algorithm": "fallback"
-        }
+        return None

@@ -13,17 +13,23 @@ def test_root_supports_head_for_health_checks():
     assert response.status_code == 200
 
 
-def test_brain_fallback_prediction_for_empty_history():
+def test_brain_reports_insufficient_data_for_empty_history():
     brain = Brain()
     result = brain.think([])
-    assert result["algorithm"] == "fallback"
-    assert result["prediction"] in {"TAI", "XIU"}
+    assert result is None
 
 
 def test_pattern_key_stable_for_history_list():
     evo = SelfEvolution()
     history = ["TAI", "XIU", "TAI", "XIU"]
     assert evo.pattern_key(history) == "TAI|XIU|TAI|XIU"
+
+
+def test_homepage_fetches_live_prediction_data():
+    response = client.get("/")
+    assert response.status_code == 200
+    body = response.text
+    assert "fetch(" in body or "/api/bot/predict" in body
 
 
 def test_bot_learn_and_predict_endpoints_work():
