@@ -1,5 +1,16 @@
+from fastapi.testclient import TestClient
+
 from brain.brain_core import Brain
 from brain.evolution import SelfEvolution
+from main import app
+
+
+client = TestClient(app)
+
+
+def test_root_supports_head_for_health_checks():
+    response = client.head("/")
+    assert response.status_code == 200
 
 
 def test_brain_fallback_prediction_for_empty_history():

@@ -9,7 +9,7 @@ app = FastAPI(title="MD5 UI")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 def root():
     return """
 <!DOCTYPE html>
